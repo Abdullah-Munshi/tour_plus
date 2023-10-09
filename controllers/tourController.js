@@ -1,11 +1,6 @@
-const fs = require('fs');
+const dayjs = require('dayjs');
 const Tour = require('./../models/tourModel');
 const APIFeatures = require('../utils/apiFeatures');
-
-const tours = JSON.parse(
-  fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`)
-);
-
 
 exports.getAllTours = async (req, res) => {
   try {
@@ -90,25 +85,25 @@ exports.deleteTour = async (req, res) => {
   } catch (error) {}
 };
 
-exports.getTourStats = async (req, res)=>{
+exports.getTourStats = async (req, res) => {
   try {
     const stats = await Tour.aggregate([
-      {$match: {ratingsAverage: {$gte: 4.5}}},
+      { $match: { ratingsAverage: { $gte: 4.5 } } },
       {
         $group: {
-          _id: {$toUpper: '$difficulty'},
-          numTours: {$sum: 1},
-          numRatings: {$sum: '$ratingsQuantity'},
-          avgRating: {$avg: '$ratingsAverage'},
-          avgPrice:{$avg: '$price'},
-          minPrice:{$min: '$price'},
-          maxPrice: {$max: '$price'}
-        }
+          _id: { $toUpper: '$difficulty' },
+          numTours: { $sum: 1 },
+          numRatings: { $sum: '$ratingsQuantity' },
+          avgRating: { $avg: '$ratingsAverage' },
+          avgPrice: { $avg: '$price' },
+          minPrice: { $min: '$price' },
+          maxPrice: { $max: '$price' },
+        },
       },
       {
-        $sort: {avgPrice: 1}
-      }
-    ])
+        $sort: { avgPrice: 1 },
+      },
+    ]);
     res.status(200).json({
       status: 'success',
       data: {
@@ -121,5 +116,44 @@ exports.getTourStats = async (req, res)=>{
       message: '',
     });
   }
-}
+};
 
+exports.getMonthlyPlan = async (req, res) => {
+  try {
+    const year = req.params.year * 1;
+    const plan = await Tour.aggregate([
+      {
+        $unwind: '$startDates',
+      },
+      {
+        $match: {
+          startDates: {
+            $gte: dayjs(`${year}-01-01`)
+              .set('hour', 10)
+              .format('YYYY-MM-DD,hh:mm'),
+            $lte: dayjs(`${year}-12-31`)
+              .set('hour', 10)
+              .format('YYYY-MM-DD,hh:mm'),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: { $toDate: '$startDates' } },
+          numTourStarts: { $sum: 1 },
+        },
+      },
+    ]);
+    res.status(200).json({
+      status: 'success',
+      data: {
+        plan,
+      },
+    });
+  } catch (error) {
+    return res.status(404).json({
+      status: 'fail',
+      message: '',
+    });
+  }
+};
